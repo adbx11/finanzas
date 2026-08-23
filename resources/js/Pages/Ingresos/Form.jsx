@@ -116,7 +116,7 @@ export default function Form({ ingreso, monedas, cuentasConcepto, cuentasDestino
                     <div>
                         <InputLabel value="Cotización" />
                         <DecimalInput
-                            className="mt-1 block w-full"
+                            className="mt-1 block w-full min-w-[11rem] font-mono"
                             decimals={10}
                             value={form.data.cotizacion}
                             onChange={(value) => form.setData('cotizacion', value)}

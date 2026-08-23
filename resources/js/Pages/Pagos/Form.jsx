@@ -11,9 +11,13 @@ import { indexHrefFromListState } from '@/utils/listState';
 import { Head, Link, useForm } from '@inertiajs/react';
 import { useEffect } from 'react';
 
-async function fetchCotizacion(idMoneda, fecha) {
+async function fetchCotizacion(idMoneda, fecha, idCuentaOrigen) {
     if (!idMoneda || !fecha) return null;
     const params = new URLSearchParams({ id_moneda: idMoneda, fecha });
+    if (idCuentaOrigen) {
+        params.set('promedio', '1');
+        params.set('id_cuenta', idCuentaOrigen);
+    }
     const res = await fetch(`${route('pagos.cotizacion')}?${params}`);
     const json = await res.json();
     return json.cotizacion;
@@ -34,15 +38,21 @@ export default function Form({ pago, monedas, cuentasConcepto, cuentasOrigen, is
     });
 
     useEffect(() => {
+        if (isEdit) return undefined;
+
         let active = true;
         (async () => {
-            const rate = await fetchCotizacion(form.data.id_moneda, form.data.fecha);
+            const rate = await fetchCotizacion(
+                form.data.id_moneda,
+                form.data.fecha,
+                form.data.id_cuenta_origen,
+            );
             if (active && rate != null) {
                 form.setData('cotizacion', formatDecimalInput(rate, 10));
             }
         })();
         return () => { active = false; };
-    }, [form.data.id_moneda, form.data.fecha]);
+    }, [isEdit, form.data.id_moneda, form.data.fecha, form.data.id_cuenta_origen]);
 
     const submit = (e) => {
         e.preventDefault();
@@ -123,7 +133,7 @@ export default function Form({ pago, monedas, cuentasConcepto, cuentasOrigen, is
                     <div>
                         <InputLabel value="Cotización" />
                         <DecimalInput
-                            className="mt-1 block w-full"
+                            className="mt-1 block w-full min-w-[11rem] max-w-xs font-mono"
                             decimals={10}
                             value={form.data.cotizacion}
                             onChange={(value) => form.setData('cotizacion', value)}

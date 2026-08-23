@@ -140,10 +140,19 @@ class PagoController extends Controller
         $data = $request->validate([
             'id_moneda' => ['required', 'integer', 'exists:monedas,id'],
             'fecha' => ['required', 'date'],
+            'id_cuenta' => ['nullable', 'integer', 'exists:cuentas,id'],
+            'promedio' => ['nullable', 'boolean'],
         ]);
 
-        $moneda = Moneda::query()->findOrFail($data['id_moneda']);
-        $rate = $this->cotizacionService->getRateForDate($moneda, Carbon::parse($data['fecha']));
+        $fecha = Carbon::parse($data['fecha']);
+
+        if ($request->boolean('promedio') && ! empty($data['id_cuenta'])) {
+            $cuenta = Cuenta::query()->findOrFail($data['id_cuenta']);
+            $rate = $this->cotizacionService->getAverageRateForAccount($cuenta, $fecha);
+        } else {
+            $moneda = Moneda::query()->findOrFail($data['id_moneda']);
+            $rate = $this->cotizacionService->getRateForDate($moneda, $fecha);
+        }
 
         return response()->json(['cotizacion' => $rate]);
     }

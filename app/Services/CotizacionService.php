@@ -2,7 +2,9 @@
 
 namespace App\Services;
 
+use App\Models\Cuenta;
 use App\Models\Moneda;
+use App\Support\Money;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -17,6 +19,36 @@ class CotizacionService
         $rates = $this->getRatesForDate($fecha);
 
         return $rates[(int) $moneda->id] ?? '1';
+    }
+
+    /**
+     * Promedio ponderado histórico de la cuenta (legacy CotizacionesDAO::getCotizacionPromedio).
+     * Si no hay movimientos previos, usa cotización spot de la moneda de la cuenta.
+     */
+    public function getAverageRateForAccount(Cuenta $cuenta, Carbon $fecha): string
+    {
+        $cuenta->loadMissing('moneda');
+
+        if (! $cuenta->moneda || $cuenta->moneda->local) {
+            return '1';
+        }
+
+        $row = DB::selectOne(
+            'SELECT SUM(ai.debe - ai.haber) AS num, SUM(ai.debe_origen - ai.haber_origen) AS den
+             FROM asientos AS a
+             INNER JOIN asiento_items AS ai ON a.id = ai.id_asiento AND ai.id_cuenta = ?
+             WHERE a.fecha <= ?',
+            [$cuenta->id, $fecha->toDateString()]
+        );
+
+        $den = isset($row->den) ? (string) $row->den : '0';
+        if (bccomp($den, '0', 10) === 0) {
+            return $this->getRateForDate($cuenta->moneda, $fecha);
+        }
+
+        $num = (string) $row->num;
+
+        return Money::round(Money::div($num, $den, 12), 10);
     }
 
     /**

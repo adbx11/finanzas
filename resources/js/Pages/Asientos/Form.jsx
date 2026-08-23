@@ -9,7 +9,7 @@ import { formatDecimalInput, parseDecimalInput } from '@/utils/decimalInput';
 import { toDateInputValue } from '@/utils/dateFormat';
 import { indexHrefFromListState } from '@/utils/listState';
 import { Head, Link, useForm } from '@inertiajs/react';
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 function emptyItem() {
     return {
@@ -37,12 +37,21 @@ function mapItems(items) {
     }));
 }
 
-async function fetchCotizacion(idMoneda, fecha) {
+async function fetchCotizacion({ idMoneda, fecha, idCuenta, promedio }) {
     if (!idMoneda || !fecha) return null;
     const params = new URLSearchParams({ id_moneda: idMoneda, fecha });
+    if (promedio && idCuenta) {
+        params.set('promedio', '1');
+        params.set('id_cuenta', idCuenta);
+    }
     const res = await fetch(`${route('asientos.cotizacion')}?${params}`);
     const json = await res.json();
     return json.cotizacion;
+}
+
+function usePromedioForItem(item) {
+    const haber = parseDecimalInput(item.haber_origen) || '0';
+    return Number(haber) !== 0;
 }
 
 function lineLocal(item) {
@@ -64,6 +73,8 @@ export default function Form({ asiento, monedas, cuentas, isCopy = false }) {
         items: mapItems(asiento?.items),
     });
 
+    const [fetchingCotizacionLine, setFetchingCotizacionLine] = useState(null);
+
     const totals = useMemo(() => {
         return form.data.items.reduce(
             (acc, item) => {
@@ -79,6 +90,8 @@ export default function Form({ asiento, monedas, cuentas, isCopy = false }) {
     const diferencia = totals.debe - totals.haber;
 
     useEffect(() => {
+        if (isEdit) return undefined;
+
         let active = true;
 
         (async () => {
@@ -88,8 +101,15 @@ export default function Form({ asiento, monedas, cuentas, isCopy = false }) {
             for (let i = 0; i < nextItems.length; i++) {
                 const item = nextItems[i];
                 if (!item.id_moneda || !form.data.fecha) continue;
-                const rate = await fetchCotizacion(item.id_moneda, form.data.fecha);
+
+                const rate = await fetchCotizacion({
+                    idMoneda: item.id_moneda,
+                    fecha: form.data.fecha,
+                    idCuenta: item.id_cuenta,
+                    promedio: usePromedioForItem(item),
+                });
                 if (!active || rate == null) continue;
+
                 const formatted = formatDecimalInput(rate, 10);
                 if (item.cotizacion !== formatted) {
                     nextItems[i] = { ...item, cotizacion: formatted };
@@ -103,7 +123,16 @@ export default function Form({ asiento, monedas, cuentas, isCopy = false }) {
         })();
 
         return () => { active = false; };
-    }, [form.data.fecha, form.data.items.map((i) => i.id_moneda).join(',')]);
+    }, [
+        isEdit,
+        form.data.fecha,
+        form.data.items.map((i) => [
+            i.id_moneda,
+            i.id_cuenta,
+            i.debe_origen,
+            i.haber_origen,
+        ].join('|')).join(';'),
+    ]);
 
     const updateItem = (index, patch) => {
         const items = form.data.items.map((item, i) => (i === index ? { ...item, ...patch } : item));
@@ -122,6 +151,25 @@ export default function Form({ asiento, monedas, cuentas, isCopy = false }) {
     const removeItem = (index) => {
         if (form.data.items.length <= 2) return;
         form.setData('items', form.data.items.filter((_, i) => i !== index));
+    };
+
+    const fetchCotizacionDelDia = async (index) => {
+        const item = form.data.items[index];
+        if (!item.id_moneda || !form.data.fecha) return;
+
+        setFetchingCotizacionLine(index);
+        try {
+            const rate = await fetchCotizacion({
+                idMoneda: item.id_moneda,
+                fecha: form.data.fecha,
+                promedio: false,
+            });
+            if (rate != null) {
+                updateItem(index, { cotizacion: formatDecimalInput(rate, 10) });
+            }
+        } finally {
+            setFetchingCotizacionLine(null);
+        }
     };
 
     const submit = (e) => {
@@ -158,7 +206,7 @@ export default function Form({ asiento, monedas, cuentas, isCopy = false }) {
                 </div>
 
                 <div className="bg-white rounded-lg shadow-sm border border-slate-200 overflow-x-auto">
-                    <table className="min-w-[900px] w-full text-sm">
+                    <table className="min-w-[980px] w-full text-sm">
                         <thead className="bg-slate-50 border-b border-slate-200">
                             <tr>
                                 <th className="px-2 py-2 text-left">Cuenta</th>
@@ -166,7 +214,7 @@ export default function Form({ asiento, monedas, cuentas, isCopy = false }) {
                                 <th className="px-2 py-2 text-left w-28">Debe</th>
                                 <th className="px-2 py-2 text-left w-28">Haber</th>
                                 <th className="px-2 py-2 text-left w-28">Moneda</th>
-                                <th className="px-2 py-2 text-left w-32">Cotización</th>
+                                <th className="px-2 py-2 text-left min-w-[13rem]">Cotización</th>
                                 <th className="px-2 py-2 w-10" />
                             </tr>
                         </thead>
@@ -174,6 +222,8 @@ export default function Form({ asiento, monedas, cuentas, isCopy = false }) {
                             {form.data.items.map((item, index) => {
                                 const cuenta = cuentas.find((c) => String(c.id) === String(item.id_cuenta));
                                 const monedaLocked = Boolean(cuenta?.id_moneda);
+                                const moneda = monedas.find((m) => String(m.id) === String(item.id_moneda));
+                                const showCotizacionDia = moneda && !moneda.local;
 
                                 return (
                                     <tr key={index}>
@@ -224,12 +274,25 @@ export default function Form({ asiento, monedas, cuentas, isCopy = false }) {
                                             </select>
                                         </td>
                                         <td className="px-2 py-2">
-                                            <DecimalInput
-                                                className="block w-full text-sm"
-                                                decimals={10}
-                                                value={item.cotizacion}
-                                                onChange={(value) => updateItem(index, { cotizacion: value })}
-                                            />
+                                            <div className="flex items-center gap-1">
+                                                <DecimalInput
+                                                    className="block w-full min-w-[11rem] text-sm font-mono"
+                                                    decimals={10}
+                                                    value={item.cotizacion}
+                                                    onChange={(value) => updateItem(index, { cotizacion: value })}
+                                                />
+                                                {showCotizacionDia && (
+                                                    <button
+                                                        type="button"
+                                                        title="Cotización del día"
+                                                        disabled={fetchingCotizacionLine === index || !form.data.fecha}
+                                                        onClick={() => fetchCotizacionDelDia(index)}
+                                                        className="shrink-0 rounded border border-slate-300 px-1.5 py-1 text-xs text-slate-600 hover:bg-slate-50 disabled:opacity-40"
+                                                    >
+                                                        {fetchingCotizacionLine === index ? '…' : 'Día'}
+                                                    </button>
+                                                )}
+                                            </div>
                                         </td>
                                         <td className="px-2 py-2 text-center">
                                             <button
