@@ -75,7 +75,8 @@ Tareas programadas (`app/Console/Kernel.php`):
 
 | Tarea | Cuándo | Comando |
 |-------|--------|---------|
-| Cotizaciones | Cada hora, 9:00–17:00 (`APP_TIMEZONE`) | `FetchCotizacionesJob` |
+| Cotizaciones fiat | Cada hora, 9:00–17:00 (`APP_TIMEZONE`) | `FetchCotizacionesJob` (fiat) |
+| Cotizaciones crypto (BTC) | Cada hora, 24 hs | `FetchCotizacionesJob` (btc) |
 | Backup BD | Diario 03:00 | `backup:run --only-db` |
 | Limpieza backups | Diario 03:30 | `backup:clean` |
 

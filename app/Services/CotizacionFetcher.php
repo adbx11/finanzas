@@ -26,34 +26,50 @@ class CotizacionFetcher
     /**
      * @return array{fiat: list<array{codigo: string, compra: string, venta: string}>, btc: array{btcusd: ?string, btcars: ?string}}
      */
-    public function fetch(?Carbon $fecha = null): array
+    public function fetch(?Carbon $fecha = null, bool $includeFiat = true, bool $includeBtc = true): array
     {
+        if (! $includeFiat && ! $includeBtc) {
+            throw new RuntimeException('Debe incluirse fiat y/o BTC.');
+        }
+
         $fecha = ($fecha ?? now())->startOfDay();
         $errors = [];
         $fiat = [];
         $btc = ['btcusd' => null, 'btcars' => null];
 
-        try {
-            $fiat = $this->fetchFiat($fecha);
-        } catch (Throwable $e) {
-            $errors[] = $e->getMessage();
-            Log::warning('CotizacionFetcher: fiat no actualizado', ['error' => $e->getMessage()]);
+        if ($includeFiat) {
+            try {
+                $fiat = $this->fetchFiat($fecha);
+            } catch (Throwable $e) {
+                $errors[] = $e->getMessage();
+                Log::warning('CotizacionFetcher: fiat no actualizado', ['error' => $e->getMessage()]);
+            }
         }
 
-        try {
-            $btc = $this->fetchBtc();
-        } catch (Throwable $e) {
-            $errors[] = $e->getMessage();
-            Log::warning('CotizacionFetcher: BTC no actualizado', ['error' => $e->getMessage()]);
+        if ($includeBtc) {
+            try {
+                $btc = $this->fetchBtc();
+            } catch (Throwable $e) {
+                $errors[] = $e->getMessage();
+                Log::warning('CotizacionFetcher: BTC no actualizado', ['error' => $e->getMessage()]);
+            }
         }
 
-        if ($fiat === [] && $btc['btcusd'] === null && $btc['btcars'] === null) {
-            throw new RuntimeException(implode(' ', $errors) ?: 'No se pudo obtener ninguna cotización.');
-        }
+        $btcOk = $btc['btcusd'] !== null || $btc['btcars'] !== null;
 
-        if ($errors !== [] && $fiat === []) {
-            // BTC ok pero fiat inválido: avisar sin marcar éxito pleno del job.
-            throw new RuntimeException(implode(' ', $errors));
+        if ($includeFiat && $includeBtc) {
+            if ($fiat === [] && ! $btcOk) {
+                throw new RuntimeException(implode(' ', $errors) ?: 'No se pudo obtener ninguna cotización.');
+            }
+
+            if ($errors !== [] && $fiat === []) {
+                // BTC ok pero fiat inválido: avisar sin marcar éxito pleno del job.
+                throw new RuntimeException(implode(' ', $errors));
+            }
+        } elseif ($includeFiat && $fiat === []) {
+            throw new RuntimeException(implode(' ', $errors) ?: 'No se pudo obtener cotización fiat.');
+        } elseif ($includeBtc && ! $btcOk) {
+            throw new RuntimeException(implode(' ', $errors) ?: 'No se pudo obtener cotización BTC.');
         }
 
         $this->config->set('cotizacion.job.ultimo_ok', now()->toDateTimeString());

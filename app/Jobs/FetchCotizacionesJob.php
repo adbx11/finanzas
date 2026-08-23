@@ -11,6 +11,7 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
+use InvalidArgumentException;
 use Throwable;
 
 class FetchCotizacionesJob implements ShouldQueue
@@ -20,27 +21,43 @@ class FetchCotizacionesJob implements ShouldQueue
     use Queueable;
     use SerializesModels;
 
+    public const SCOPE_ALL = 'all';
+
+    public const SCOPE_FIAT = 'fiat';
+
+    public const SCOPE_BTC = 'btc';
+
     public int $tries = 2;
 
     public int $backoff = 60;
 
     public function __construct(
         public bool $force = false,
-    ) {}
+        public string $scope = self::SCOPE_ALL,
+    ) {
+        if (! in_array($this->scope, [self::SCOPE_ALL, self::SCOPE_FIAT, self::SCOPE_BTC], true)) {
+            throw new InvalidArgumentException("Scope de cotizaciones inválido: {$this->scope}");
+        }
+    }
 
     public function handle(CotizacionFetcher $fetcher, ConfiguracionService $config): void
     {
-        if (! $this->force && ! $this->withinScheduleWindow($config)) {
-            Log::info('FetchCotizacionesJob omitido fuera de ventana horaria');
+        $needsWindow = $this->scope === self::SCOPE_FIAT || $this->scope === self::SCOPE_ALL;
+
+        if (! $this->force && $needsWindow && ! $this->withinScheduleWindow($config)) {
+            Log::info('FetchCotizacionesJob omitido fuera de ventana horaria', ['scope' => $this->scope]);
 
             return;
         }
 
         try {
-            $result = $fetcher->fetch();
-            Log::info('FetchCotizacionesJob OK', $result);
+            $result = $fetcher->fetch(
+                includeFiat: $this->scope !== self::SCOPE_BTC,
+                includeBtc: $this->scope !== self::SCOPE_FIAT,
+            );
+            Log::info('FetchCotizacionesJob OK', ['scope' => $this->scope] + $result);
         } catch (Throwable $e) {
-            Log::error('FetchCotizacionesJob falló: '.$e->getMessage());
+            Log::error('FetchCotizacionesJob falló: '.$e->getMessage(), ['scope' => $this->scope]);
             throw $e;
         }
     }

@@ -13,13 +13,19 @@ class Kernel extends ConsoleKernel
      */
     protected function schedule(Schedule $schedule): void
     {
-        // Cotizaciones: cada hora en ventana laboral (timezone APP_TIMEZONE).
+        // Fiat (Ámbito): cada hora en ventana laboral (timezone APP_TIMEZONE).
         // La ventana también se valida dentro del job vía cotizacion.job.hora_*.
-        $schedule->job(new FetchCotizacionesJob)
+        $schedule->job(new FetchCotizacionesJob(scope: FetchCotizacionesJob::SCOPE_FIAT))
             ->hourly()
             ->between('9:00', '17:00')
             ->withoutOverlapping(55)
-            ->name('fetch-cotizaciones');
+            ->name('fetch-cotizaciones-fiat');
+
+        // Crypto (BTC / CoinGecko): cada hora, las 24 hs.
+        $schedule->job(new FetchCotizacionesJob(scope: FetchCotizacionesJob::SCOPE_BTC))
+            ->hourly()
+            ->withoutOverlapping(55)
+            ->name('fetch-cotizaciones-crypto');
 
         // Backup solo BD + registro de estado por destino (local / FTP).
         $schedule->command('finanzas:backup')

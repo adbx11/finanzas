@@ -104,6 +104,65 @@ Si no usás Git, subí el proyecto (sin `node_modules` / `vendor`) y descomprimi
 
 ---
 
+## 3.1 Usuario `ubuntu` vs `www-data`
+
+Nginx/PHP-FPM corre como **www-data**. Para instalar y actualizar como usuario **ubuntu** sin pelear por permisos, lo más simple es que el código sea de `ubuntu` y el grupo `www-data`, con escritura compartida en `storage` y `bootstrap/cache`:
+
+```bash
+# Una sola vez (o después de clonar como root/www-data)
+sudo chown -R ubuntu:www-data /var/www/finanzas
+sudo find /var/www/finanzas -type d -exec chmod 775 {} \;
+sudo find /var/www/finanzas -type f -exec chmod 664 {} \;
+sudo chmod -R ug+rwx /var/www/finanzas/storage /var/www/finanzas/bootstrap/cache
+sudo chmod g+s /var/www/finanzas/storage /var/www/finanzas/bootstrap/cache
+
+# Para que ubuntu pueda escribir con el grupo www-data
+sudo usermod -aG www-data ubuntu
+# cerrá sesión SSH y volvé a entrar para que aplique el grupo
+```
+
+Después podés ejecutar **como ubuntu** (sin `sudo`):
+
+```bash
+cd /var/www/finanzas
+composer install --no-dev --optimize-autoloader
+npm ci && npm run build
+php artisan key:generate
+php artisan migrate --force
+# etc.
+```
+
+### Alternativa: todo como `www-data`
+
+Si preferís dejar el dueño en `www-data`:
+
+```bash
+cd /var/www/finanzas
+sudo -u www-data -H bash
+
+# dentro de esa shell:
+composer install --no-dev --optimize-autoloader
+# ...
+exit
+```
+
+O comando por comando:
+
+```bash
+sudo -u www-data composer install --no-dev --optimize-autoloader
+sudo -u www-data php artisan migrate --force
+```
+
+Para `npm`, Node suele estar en el PATH de `ubuntu`; más fácil build como `ubuntu` y luego:
+
+```bash
+sudo chown -R www-data:www-data /var/www/finanzas
+```
+
+**Recomendado en esta guía:** modelo `ubuntu:www-data` (sección de arriba) + `./update.sh` como `ubuntu`.
+
+---
+
 ## 4. Variables de entorno
 
 ```bash
@@ -180,18 +239,27 @@ mysql -u finanzas -p finanzas < scripts/add-performance-indexes.sql
 
 ## 6. Permisos
 
+Si ya aplicaste la sección **3.1** (`ubuntu:www-data`), alcanza con:
+
 ```bash
 cd /var/www/finanzas
-
-sudo chown -R "$USER":www-data .
-sudo find . -type f -exec chmod 644 {} \;
-sudo find . -type d -exec chmod 755 {} \;
-
-sudo chown -R www-data:www-data storage bootstrap/cache
 sudo chmod -R ug+rwx storage bootstrap/cache
 ```
 
-El usuario de deploy necesita poder escribir en `storage` y `bootstrap/cache` (o hacerlo como `www-data` / con grupo compartido).
+Si partís de cero:
+
+```bash
+cd /var/www/finanzas
+
+sudo chown -R ubuntu:www-data .
+sudo find . -type d -exec chmod 775 {} \;
+sudo find . -type f -exec chmod 664 {} \;
+
+sudo chmod -R ug+rwx storage bootstrap/cache
+sudo chmod g+s storage bootstrap/cache
+```
+
+PHP-FPM (`www-data`) debe poder escribir en `storage` y `bootstrap/cache`. El usuario de deploy (`ubuntu`) debe poder hacer `git pull`, `composer` y `npm`.
 
 ---
 

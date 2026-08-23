@@ -82,7 +82,7 @@ scripts/                    # db-sync, add-performance-indexes.sql
 - Asientos: listado, alta/edición multi-línea
 - Conciliación: saldos 1.1 vs real → asiento + `5.9.00.00`
 - Informes: Balance, Mayor, Gastos, Intereses, Evolución patrimonial/cuenta, Crypto
-- Cotizaciones: ABM + fetch manual; job horario 9–17h (`cotizacion.job.hora_*`)
+- Cotizaciones: ABM + fetch manual; fiat job horario 9–17h (`cotizacion.job.hora_*`); crypto (BTC) cada hora 24 hs
 - Crypto tipificación: Coins/Wallets CRUD; transacciones tipificadas
 - Configuración clave/valor (`configuracion`)
 - Usuarios y roles (admin)
