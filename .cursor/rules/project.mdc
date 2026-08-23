@@ -1,0 +1,151 @@
+---
+description: Contexto del proyecto ADB Finanzas v2 (Laravel + Inertia + React)
+alwaysApply: true
+---
+
+# ADB Finanzas v2 — Memoria de proyecto
+
+## Qué es
+
+Migración de **ADB Finanzas**, sistema legacy de finanzas personales (Java/Servlets/JSP en `D:\ADB\workspace\ADBFinanzas`), a **Laravel 10 + Inertia.js + React 18 + Tailwind**.
+
+Repo de trabajo: `D:\ADB\finanzas`
+
+## Stack y restricciones
+
+| Tema | Decisión |
+|------|----------|
+| PHP | **8.1** → Laravel **10** (no 11) |
+| Frontend | Breeze + Inertia + React + Tailwind |
+| Auth roles | `spatie/laravel-permission` — `admin`, `operador`, `lectura` |
+| BD dev | `finanzas_dev` (copia de producción vía scripts) |
+| Esquema | **Reutilizar tablas legacy**; migraciones Laravel solo para `users`, `permissions`, `jobs`, etc. |
+| Timezone | `APP_TIMEZONE=America/Argentina/Buenos_Aires` |
+| Excluido (definitivo) | AFIP / factura electrónica, mining, cliente SQL, OAuth |
+
+## Base de datos
+
+- Esquema de referencia: `docs/finanzas_nodata.sql`
+- Modelos legacy extienden `App\Models\LegacyModel` (`$timestamps = false`)
+- Tablas principales: `monedas`, `cuentas`, `ingresos`, `pagos`, `asientos`, `asiento_items`, `cotizaciones`, `coin_transactions`, `configuracion`
+- Tipificación crypto: `crypto_coins`, `crypto_wallets` (migraciones Laravel; seed desde `coin_transactions`)
+- Script copia prod→dev: `scripts/db-sync.ps1` / `scripts/db-sync.sh` (config en `scripts/.env.sync`, no commitear)
+- Índices opcionales: `scripts/add-performance-indexes.sql` (sobre todo `asientos.fecha`, `cotizaciones(id_moneda,fecha)`)
+- Credenciales Laravel en `.env` deben coincidir con destino del sync (`SYNC_TARGET_*`)
+
+## Auth
+
+- Tabla `users` nueva (Laravel); import desde `sec_usuario` con `php artisan finanzas:import-users`
+- Login por **username o email** (`LoginRequest`); usuarios inactivos rechazados
+- Registro y recuperación de contraseña **deshabilitados**
+- Password legacy (HMAC-SHA512) no es compatible con bcrypt; reset manual en import
+- Rutas admin: middleware `role:admin` (Usuarios, Roles, Backup)
+
+## Estructura clave
+
+```
+app/Http/Controllers/     # CRUD por módulo + Dashboard/Backup JSON
+app/Http/Concerns/AppliesColumnFilters.php
+app/Models/               # Eloquent sobre tablas legacy + CryptoCoin/Wallet
+app/Services/
+  Contabilidad/           # AsientoGenerator, CuotaGenerator, DashboardService, …
+  CotizacionFetcher.php   # Ámbito + CoinGecko
+  CotizacionService.php   # rates batch por fecha
+  BackupStatusService.php # estado por disco + run manual
+  Crypto/CryptoService.php
+app/Jobs/FetchCotizacionesJob.php
+app/Support/Money.php
+app/Console/Commands/
+  finanzas:db-verify
+  finanzas:import-users
+  finanzas:fetch-cotizaciones
+  finanzas:backup
+resources/js/
+  Layouts/AdminLayout.jsx   # sidebar, dark mode toggle, nav colapsable
+  Pages/Dashboard.jsx       # carga diferida (saldos/dist/crypto en paralelo)
+  Pages/Backup/Index.jsx    # estado + disparo manual (admin)
+  Components/DataTable/FilterableTable.jsx
+  utils/theme.js            # localStorage finanzas.theme
+  config/navigation.js
+resources/css/app.css       # darkMode class + overrides globales inputs/tablas
+config/backup.php           # spatie/laravel-backup (solo DB)
+docs/
+scripts/                    # db-sync, add-performance-indexes.sql
+```
+
+## Módulos implementados
+
+- Login, Dashboard (saldos, distribución, crypto; endpoints `/dashboard/saldos|distribucion|crypto|crypto/wallets`; cache corta; wallets lazy)
+- Monedas, Cuentas (CRUD inline)
+- Ingresos / Pagos (listado, filtros, asiento automático, cuotas tarjeta)
+- Tarjetas: liquidación mensual TC
+- Asientos: listado, alta/edición multi-línea
+- Conciliación: saldos 1.1 vs real → asiento + `5.9.00.00`
+- Informes: Balance, Mayor, Gastos, Intereses, Evolución patrimonial/cuenta, Crypto
+- Cotizaciones: ABM + fetch manual; job horario 9–17h (`cotizacion.job.hora_*`)
+- Crypto tipificación: Coins/Wallets CRUD; transacciones tipificadas
+- Configuración clave/valor (`configuracion`)
+- Usuarios y roles (admin)
+- **Backup** (`spatie/laravel-backup`): schedule 03:00/`finanzas:backup` + clean 03:30; UI admin con estado por destino (local/FTP); `BACKUP_DISKS`
+- **Dark mode** (`darkMode: 'class'`); nav secciones colapsables
+- Layout admin responsive (`lg` + hamburguesa)
+
+## Pendiente (prioridad según docs/IMPLEMENTATION_PLAN.md)
+
+- Informes: FCI, informe tarjetas
+- Tipos de movimiento, plantillas email, plazos fijos
+- Restringir escritura por rol (`operador` / `lectura`) en el resto de módulos
+- Deploy producción (Nginx, `deploy.sh`); cron SO: `* * * * * php artisan schedule:run`
+- Aplicar índices de performance en prod si aún no están
+
+## Fuera de alcance (no implementar)
+
+- Facturación electrónica AFIP y tablas asociadas (`facturas*`, `cuits_emisores`, `puntos_de_venta`, catálogos IVA/doc/comprobante)
+- Mining (`mining_log`, `mining_payout_log`)
+- Cliente SQL embebido, OAuth
+
+## Tablas candidatas a DROP tras corte a v2
+
+Ver detalle en respuesta de auditoría; resumen: AFIP completo, mining, geo, `C3P0TestTable`, email store, `image`, calendarios `fechas*`, y (si no se retoman) `movimientos`/`tipos_movimiento`/`template`/`fci_cotizaciones`/`plazos_fijos`/`sec_*`.
+
+## Convenciones al implementar
+
+1. **Minimizar scope** — diffs pequeños, seguir patrones existentes
+2. **Contabilidad** — portar lógica desde Java (`Ingreso.java`, `Pago.java`, `PagoABM.java`, `Stats.java`)
+3. **Ingresos/Pagos** — siempre regenerar asiento vía `AsientoGenerator` al guardar
+4. **Listados** — `FilterableTable` + `AppliesColumnFilters`; `filters[key]` en query. Paginación `ListPagination::PER_PAGE` (100). Persistir con `usePersistedListState`; `resetListState` en nav. Ingresos/Pagos: `PeriodFilters` (año/mes opcionales)
+5. **Cuentas en formularios** — `Cuenta::FCODIGO_*`: ingresos concepto `4._.__.__,5.9.00.00`, destino `1.1.01.__,5.9.00.00`; pagos concepto `5._.__.__,2.1.01.__,4.2.01.00,4.2.99.__`, origen `1.1.01.__,2.1.01.__`
+6. **UI** — español, `AdminLayout`, Tailwind slate/emerald; preferir `dark:` en componentes nuevos; overrides en `app.css` para pantallas legacy-light
+7. **Scheduler** — ventana cotizaciones en Kernel + check en job; backup vía `finanzas:backup` (registra estado por disco)
+8. **No commitear** `.env`, `scripts/.env.sync`, secretos, dumps en `storage/app/`
+
+## Comandos útiles
+
+```bash
+php artisan migrate
+php artisan db:seed --class=RolesSeeder
+php artisan finanzas:import-users --password=dev123456
+php artisan finanzas:db-verify
+php artisan finanzas:fetch-cotizaciones
+php artisan finanzas:backup          # backup BD + estado por destino
+php artisan backup:list
+php artisan schedule:list
+php artisan schedule:work            # local: corre el scheduler
+npm run dev
+php artisan serve
+npm run build
+```
+
+## Referencias legacy
+
+- Código Java: `D:\ADB\workspace\ADBFinanzas`
+- JSP/FTL admin: `webapp/WEB-INF/ftl/admin/`
+- DataTables legacy: filtros por columna en `#dt-filters` + `abm.common.js`
+- Home legacy: 5 AJAX paralelos (`activo_x_moneda`, `btc`, `distribucion_*`)
+
+## Documentación extendida
+
+- `docs/REQUIREMENTS.md` — relevamiento funcional completo
+- `docs/IMPLEMENTATION_PLAN.md` — fases y estructura objetivo
+- `docs/MIGRATION_PLAN.md` — decisión de stack
+- `README.md` — setup local, cron, backup/FTP

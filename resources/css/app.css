@@ -1,0 +1,148 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * Dark mode overrides for pages that use light-only utility classes.
+ * Prefer adding dark: variants in new code; these keep existing screens readable.
+ * Avoid @apply with opacity modifiers (bg-*-800/80) — PostCSS rejects them.
+ */
+@layer base {
+    .dark {
+        color-scheme: dark;
+    }
+}
+
+@layer utilities {
+    .dark .bg-white {
+        background-color: theme('colors.slate.900');
+    }
+
+    .dark .bg-gray-100 {
+        background-color: theme('colors.slate.950');
+    }
+
+    .dark .bg-slate-50,
+    .dark .bg-slate-50\/80 {
+        background-color: rgb(30 41 59 / 0.85); /* slate-800 */
+    }
+
+    .dark .bg-slate-100,
+    .dark .bg-slate-100\/80 {
+        background-color: theme('colors.slate.800');
+    }
+
+    .dark .border-slate-100,
+    .dark .border-slate-200,
+    .dark .border-slate-300,
+    .dark .border-gray-300 {
+        border-color: theme('colors.slate.700');
+    }
+
+    .dark .divide-slate-100 > :not([hidden]) ~ :not([hidden]),
+    .dark .divide-slate-200 > :not([hidden]) ~ :not([hidden]) {
+        border-color: theme('colors.slate.700');
+    }
+
+    .dark .text-slate-800,
+    .dark .text-slate-900 {
+        color: theme('colors.slate.100');
+    }
+
+    .dark .text-gray-700,
+    .dark .text-slate-700 {
+        color: theme('colors.slate.300');
+    }
+
+    .dark .text-slate-600 {
+        color: theme('colors.slate.300');
+    }
+
+    .dark .text-slate-500,
+    .dark .text-slate-400 {
+        color: theme('colors.slate.400');
+    }
+
+    .dark .hover\:bg-slate-50:hover,
+    .dark .hover\:bg-slate-100:hover {
+        background-color: theme('colors.slate.800');
+    }
+
+    .dark .bg-emerald-50,
+    .dark .bg-emerald-50\/80 {
+        background-color: rgb(2 44 34 / 0.7); /* emerald-950 */
+    }
+
+    .dark .border-emerald-200 {
+        border-color: theme('colors.emerald.800');
+    }
+
+    .dark .text-emerald-800,
+    .dark .text-emerald-700 {
+        color: theme('colors.emerald.300');
+    }
+
+    .dark .bg-red-50 {
+        background-color: rgb(69 10 10 / 0.4); /* red-950 */
+    }
+
+    .dark .border-red-200 {
+        border-color: theme('colors.red.800');
+    }
+
+    .dark .text-red-800 {
+        color: theme('colors.red.300');
+    }
+
+    .dark .bg-amber-50\/50 {
+        background-color: rgb(69 26 3 / 0.3); /* amber-950 */
+    }
+
+    .dark .hover\:bg-emerald-50\/50:hover,
+    .dark .hover\:bg-emerald-50\/50:hover,
+    .dark .hover\:bg-emerald-50\/70:hover,
+    .dark .hover\:bg-emerald-50:hover,
+    .dark .hover\:bg-emerald-100:hover,
+    .dark .bg-emerald-50\/70 {
+        background-color: rgb(2 44 34 / 0.4);
+    }
+
+    .dark .bg-gray-800 {
+        background-color: theme('colors.emerald.700');
+    }
+
+    .dark .hover\:bg-gray-700:hover {
+        background-color: theme('colors.emerald.600');
+    }
+
+    .dark select,
+    .dark input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='file']):not([type='hidden']),
+    .dark textarea {
+        background-color: theme('colors.slate.800');
+        color: theme('colors.slate.100');
+        border-color: theme('colors.slate.600');
+    }
+
+    .dark input::placeholder,
+    .dark textarea::placeholder {
+        color: theme('colors.slate.400');
+    }
+
+    /* Native date/time calendar icon — color-scheme:dark already lightens it;
+       extra invert made it dark again on slate backgrounds. */
+    .dark input[type='date'],
+    .dark input[type='datetime-local'],
+    .dark input[type='month'],
+    .dark input[type='time'] {
+        color-scheme: dark;
+    }
+
+    .dark input[type='date']::-webkit-calendar-picker-indicator,
+    .dark input[type='datetime-local']::-webkit-calendar-picker-indicator,
+    .dark input[type='month']::-webkit-calendar-picker-indicator,
+    .dark input[type='time']::-webkit-calendar-picker-indicator {
+        cursor: pointer;
+        opacity: 1;
+        filter: none;
+    }
+}

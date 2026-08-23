@@ -1,0 +1,1 @@
+export { useDataTableQuery } from './useDataTableQuery';
