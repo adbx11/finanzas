@@ -56,6 +56,11 @@ class CuentaController extends Controller
             'cuentas' => $query->paginate(ListPagination::PER_PAGE)->withQueryString(),
             'monedas' => Moneda::query()->orderBy('codigo')->get(),
             'cuentasSuperiores' => Cuenta::query()->orderBy('codigo')->get(['id', 'codigo', 'descripcion']),
+            'cuentasImputables' => Cuenta::query()
+                ->habilitadas()
+                ->imputables()
+                ->orderBy('codigo')
+                ->get(['id', 'codigo', 'descripcion', 'id_moneda']),
             'filters' => $this->filterValues($request),
             'sort' => $this->sortColumn($request),
             'direction' => $this->sortDirection($request),
@@ -116,16 +121,27 @@ class CuentaController extends Controller
     {
         $id = $cuenta?->id;
 
-        return $request->validate([
+        $data = $request->validate([
             'codigo' => ['required', 'string', 'max:32', 'unique:cuentas,codigo,'.$id],
             'descripcion' => ['required', 'string', 'max:255'],
             'id_superior' => ['nullable', 'integer', 'exists:cuentas,id'],
             'id_moneda' => ['nullable', 'integer', 'exists:monedas,id'],
+            'id_cuenta_intereses' => ['nullable', 'integer', 'exists:cuentas,id'],
+            'id_cuenta_ajuste' => ['nullable', 'integer', 'exists:cuentas,id'],
             'tipo_estado' => ['required', 'string', 'max:16'],
             'tipo_cuenta' => ['nullable', 'string', 'max:16'],
             'clase' => ['nullable', 'string', 'max:24'],
             'imputable' => ['boolean'],
             'habilitada' => ['boolean'],
         ]);
+
+        if ($id && (int) ($data['id_cuenta_intereses'] ?? 0) === (int) $id) {
+            $data['id_cuenta_intereses'] = null;
+        }
+        if ($id && (int) ($data['id_cuenta_ajuste'] ?? 0) === (int) $id) {
+            $data['id_cuenta_ajuste'] = null;
+        }
+
+        return $data;
     }
 }

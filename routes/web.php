@@ -80,6 +80,8 @@ Route::middleware(['auth'])->group(function () {
 
     Route::get('/conciliacion', [ConciliacionController::class, 'index'])->name('conciliacion.index');
     Route::post('/conciliacion', [ConciliacionController::class, 'store'])->name('conciliacion.store');
+    Route::get('/conciliacion/asiento-intereses', [ConciliacionController::class, 'asientoIntereses'])->name('conciliacion.asiento-intereses');
+    Route::get('/conciliacion/asiento-ajuste', [ConciliacionController::class, 'asientoAjuste'])->name('conciliacion.asiento-ajuste');
 
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');

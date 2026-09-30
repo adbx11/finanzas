@@ -25,7 +25,7 @@ class ConciliacionService
     /**
      * Cuentas imputables 1.1% con saldo al cierre de la fecha (como get.conciliacion legacy).
      *
-     * @return list<array{id: int, codigo: string, descripcion: string, id_moneda: ?int, moneda: ?array, saldo: string}>
+     * @return list<array{id: int, codigo: string, descripcion: string, id_moneda: ?int, moneda: ?array, saldo: string, id_cuenta_intereses: ?int, id_cuenta_ajuste: ?int}>
      */
     public function preview(Carbon $fecha): array
     {
@@ -54,8 +54,102 @@ class ConciliacionService
                     'simbolo' => $cuenta->moneda->simbolo,
                 ] : null,
                 'saldo' => $saldo,
+                'id_cuenta_intereses' => $cuenta->id_cuenta_intereses,
+                'id_cuenta_ajuste' => $cuenta->id_cuenta_ajuste,
             ];
         })->values()->all();
+    }
+
+    /**
+     * Prefill de asiento (sin guardar) para registrar la diferencia contra intereses o ajuste.
+     *
+     * @return array{fecha: string, descripcion: string, items: list<array>}
+     */
+    public function draftDiferencia(
+        Carbon $fecha,
+        int $idCuenta,
+        string $saldoReal,
+        string $tipo,
+    ): array {
+        if (! in_array($tipo, ['intereses', 'ajuste'], true)) {
+            throw new RuntimeException('Tipo de asiento inválido.');
+        }
+
+        $monedaLocal = Moneda::local();
+        if (! $monedaLocal) {
+            throw new RuntimeException('No hay moneda local configurada.');
+        }
+
+        $cuenta = Cuenta::query()->with(['moneda', 'cuentaIntereses.moneda', 'cuentaAjuste.moneda'])->find($idCuenta);
+        if (! $cuenta) {
+            throw new RuntimeException('Cuenta no encontrada.');
+        }
+
+        $contraparte = $tipo === 'intereses' ? $cuenta->cuentaIntereses : $cuenta->cuentaAjuste;
+        if (! $contraparte) {
+            throw new RuntimeException(
+                $tipo === 'intereses'
+                    ? 'La cuenta no tiene cuenta de intereses asociada.'
+                    : 'La cuenta no tiene cuenta de ajuste asociada.'
+            );
+        }
+
+        $saldoReal = Money::round($saldoReal, 2);
+        $saldos = $this->saldoService->getSaldos($cuenta, null, $fecha);
+        $saldoSistema = $cuenta->id_moneda
+            ? $saldos['saldo_origen']
+            : $saldos['saldo'];
+
+        $diferencia = Money::sub($saldoReal, $saldoSistema, 2);
+        if (Money::isZero($diferencia)) {
+            throw new RuntimeException('No hay diferencia para registrar.');
+        }
+
+        $cotizacion = $cuenta->moneda
+            ? $this->cotizacionService->getRateForDate($cuenta->moneda, $fecha)
+            : '1';
+        $moneda = $cuenta->moneda ?? $monedaLocal;
+
+        $debeOrigen = bccomp($diferencia, '0', 2) > 0 ? $diferencia : '0.00';
+        $haberOrigen = bccomp($diferencia, '0', 2) < 0
+            ? Money::round(bcmul($diferencia, '-1', 8), 2)
+            : '0.00';
+
+        $importeLocal = Money::round(Money::mul($diferencia, $cotizacion, 8), 2);
+        $debeAjuste = bccomp($importeLocal, '0', 2) < 0
+            ? Money::round(bcmul($importeLocal, '-1', 8), 2)
+            : '0.00';
+        $haberAjuste = bccomp($importeLocal, '0', 2) > 0 ? $importeLocal : '0.00';
+
+        $ganado = bccomp($diferencia, '0', 2) > 0;
+        if ($tipo === 'intereses') {
+            $descripcion = ($ganado ? 'Intereses ganados' : 'Intereses perdidos').' — '.$cuenta->codigo.' '.$cuenta->descripcion;
+        } else {
+            $descripcion = 'Ajuste conciliación — '.$cuenta->codigo.' '.$cuenta->descripcion;
+        }
+
+        return [
+            'fecha' => $fecha->toDateString(),
+            'descripcion' => $descripcion,
+            'items' => [
+                [
+                    'id_cuenta' => $cuenta->id,
+                    'id_moneda' => $moneda->id,
+                    'unidades' => null,
+                    'debe_origen' => $debeOrigen,
+                    'haber_origen' => $haberOrigen,
+                    'cotizacion' => $cotizacion,
+                ],
+                [
+                    'id_cuenta' => $contraparte->id,
+                    'id_moneda' => $monedaLocal->id,
+                    'unidades' => null,
+                    'debe_origen' => $debeAjuste,
+                    'haber_origen' => $haberAjuste,
+                    'cotizacion' => '1',
+                ],
+            ],
+        ];
     }
 
     /**

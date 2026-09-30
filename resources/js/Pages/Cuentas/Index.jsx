@@ -1,4 +1,5 @@
 import AdminLayout from '@/Layouts/AdminLayout';
+import CuentaSelect from '@/Components/CuentaSelect';
 import FilterableTable from '@/Components/DataTable/FilterableTable';
 import RowActions from '@/Components/DataTable/RowActions';
 import InputError from '@/Components/InputError';
@@ -9,12 +10,14 @@ import { useDataTableQuery } from '@/hooks/useDataTableQuery';
 import { Head, router, useForm } from '@inertiajs/react';
 import { useState } from 'react';
 
-function CuentaForm({ cuenta, monedas, cuentasSuperiores, onCancel }) {
+function CuentaForm({ cuenta, monedas, cuentasSuperiores, cuentasImputables, onCancel }) {
     const form = useForm({
         codigo: cuenta?.codigo || '',
         descripcion: cuenta?.descripcion || '',
         id_superior: cuenta?.id_superior || '',
         id_moneda: cuenta?.id_moneda || '',
+        id_cuenta_intereses: cuenta?.id_cuenta_intereses || '',
+        id_cuenta_ajuste: cuenta?.id_cuenta_ajuste || '',
         tipo_estado: cuenta?.tipo_estado || 'A',
         tipo_cuenta: cuenta?.tipo_cuenta || '',
         clase: cuenta?.clase || '',
@@ -28,13 +31,17 @@ function CuentaForm({ cuenta, monedas, cuentasSuperiores, onCancel }) {
             ...form.data,
             id_superior: form.data.id_superior || null,
             id_moneda: form.data.id_moneda || null,
+            id_cuenta_intereses: form.data.id_cuenta_intereses || null,
+            id_cuenta_ajuste: form.data.id_cuenta_ajuste || null,
         };
-        if (cuenta) {
+        if (cuenta?.id) {
             router.put(route('cuentas.update', cuenta.id), payload, { onSuccess: onCancel });
         } else {
             router.post(route('cuentas.store'), payload, { onSuccess: onCancel });
         }
     };
+
+    const otrasCuentas = (cuentasImputables || []).filter((c) => !cuenta?.id || String(c.id) !== String(cuenta.id));
 
     return (
         <form onSubmit={submit} className="bg-slate-50 border border-slate-200 rounded-lg p-4 mb-6 grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -78,6 +85,28 @@ function CuentaForm({ cuenta, monedas, cuentasSuperiores, onCancel }) {
                 <InputLabel value="Tipo cuenta" />
                 <TextInput className="mt-1 block w-full" value={form.data.tipo_cuenta} onChange={(e) => form.setData('tipo_cuenta', e.target.value)} />
             </div>
+            <div className="md:col-span-2">
+                <InputLabel value="Cuenta de intereses (opcional)" />
+                <CuentaSelect
+                    className="mt-1"
+                    cuentas={otrasCuentas}
+                    value={form.data.id_cuenta_intereses}
+                    onChange={(id) => form.setData('id_cuenta_intereses', id || '')}
+                    placeholder="Sin cuenta de intereses..."
+                />
+                <InputError message={form.errors.id_cuenta_intereses} />
+            </div>
+            <div className="md:col-span-2">
+                <InputLabel value="Cuenta de ajuste (opcional)" />
+                <CuentaSelect
+                    className="mt-1"
+                    cuentas={otrasCuentas}
+                    value={form.data.id_cuenta_ajuste}
+                    onChange={(id) => form.setData('id_cuenta_ajuste', id || '')}
+                    placeholder="Sin cuenta de ajuste..."
+                />
+                <InputError message={form.errors.id_cuenta_ajuste} />
+            </div>
             <div className="flex items-center gap-6">
                 <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.data.imputable} onChange={(e) => form.setData('imputable', e.target.checked)} /> Imputable</label>
                 <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.data.habilitada} onChange={(e) => form.setData('habilitada', e.target.checked)} /> Habilitada</label>
@@ -90,7 +119,7 @@ function CuentaForm({ cuenta, monedas, cuentasSuperiores, onCancel }) {
     );
 }
 
-export default function Index({ cuentas, monedas, cuentasSuperiores, filters: initialFilters, sort: initialSort, direction: initialDirection }) {
+export default function Index({ cuentas, monedas, cuentasSuperiores, cuentasImputables, filters: initialFilters, sort: initialSort, direction: initialDirection }) {
     const [editing, setEditing] = useState(null);
     const [creating, setCreating] = useState(false);
     const [copying, setCopying] = useState(null);
@@ -176,7 +205,13 @@ export default function Index({ cuentas, monedas, cuentasSuperiores, filters: in
             </div>
 
             {(creating || editing || copying) && (
-                <CuentaForm cuenta={editing || copying} monedas={monedas} cuentasSuperiores={cuentasSuperiores} onCancel={closeForm} />
+                <CuentaForm
+                    cuenta={editing || copying}
+                    monedas={monedas}
+                    cuentasSuperiores={cuentasSuperiores}
+                    cuentasImputables={cuentasImputables}
+                    onCancel={closeForm}
+                />
             )}
 
             <FilterableTable

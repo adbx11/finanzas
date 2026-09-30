@@ -64,7 +64,7 @@ function lineLocal(item) {
     };
 }
 
-export default function Form({ asiento, monedas, cuentas, isCopy = false }) {
+export default function Form({ asiento, monedas, cuentas, isCopy = false, isPrefill = false }) {
     const isEdit = Boolean(asiento?.id);
 
     const form = useForm({
@@ -90,7 +90,7 @@ export default function Form({ asiento, monedas, cuentas, isCopy = false }) {
     const diferencia = totals.debe - totals.haber;
 
     useEffect(() => {
-        if (isEdit) return undefined;
+        if (isEdit || isPrefill) return undefined;
 
         let active = true;
 
@@ -125,6 +125,7 @@ export default function Form({ asiento, monedas, cuentas, isCopy = false }) {
         return () => { active = false; };
     }, [
         isEdit,
+        isPrefill,
         form.data.fecha,
         form.data.items.map((i) => [
             i.id_moneda,
@@ -186,7 +187,7 @@ export default function Form({ asiento, monedas, cuentas, isCopy = false }) {
     const indexHref = indexHrefFromListState('asientos.index');
 
     return (
-        <AdminLayout header={isEdit ? 'Editar asiento' : isCopy ? 'Nuevo asiento (copia)' : 'Nuevo asiento'}>
+        <AdminLayout header={isEdit ? 'Editar asiento' : isCopy ? 'Nuevo asiento (copia)' : isPrefill ? 'Nuevo asiento (borrador)' : 'Nuevo asiento'}>
             <Head title={isEdit ? 'Editar asiento' : 'Nuevo asiento'} />
 
             <form onSubmit={submit} className="space-y-4 max-w-6xl">

@@ -26,7 +26,62 @@ function buildRows(cuentas) {
         moneda: c.moneda,
         saldo: c.saldo,
         saldo_real: formatDecimalInput(c.saldo, 2),
+        id_cuenta_intereses: c.id_cuenta_intereses,
+        id_cuenta_ajuste: c.id_cuenta_ajuste,
     }));
+}
+
+function AccountLinks({ row, fecha, diff }) {
+    const hasDiff = diff !== 0;
+    const mayorHref = route('informes.mayor', {
+        id_cuenta: row.id_cuenta,
+        hasta: fecha,
+    });
+
+    const draftParams = {
+        id_cuenta: row.id_cuenta,
+        fecha,
+        saldo_real: row.saldo_real,
+    };
+
+    const linkClass = 'text-xs text-emerald-700 hover:underline dark:text-emerald-400';
+    const disabledClass = 'text-xs text-slate-300 cursor-not-allowed dark:text-slate-600';
+
+    return (
+        <div className="flex flex-wrap gap-x-2 gap-y-0.5 mt-0.5">
+            <a href={mayorHref} target="_blank" rel="noopener noreferrer" className={linkClass}>
+                Mayor
+            </a>
+            {row.id_cuenta_intereses && (
+                hasDiff ? (
+                    <a
+                        href={route('conciliacion.asiento-intereses', draftParams)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={linkClass}
+                    >
+                        Intereses
+                    </a>
+                ) : (
+                    <span className={disabledClass} title="Sin diferencia">Intereses</span>
+                )
+            )}
+            {row.id_cuenta_ajuste && (
+                hasDiff ? (
+                    <a
+                        href={route('conciliacion.asiento-ajuste', draftParams)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={linkClass}
+                    >
+                        Ajuste
+                    </a>
+                ) : (
+                    <span className={disabledClass} title="Sin diferencia">Ajuste</span>
+                )
+            )}
+        </div>
+    );
 }
 
 export default function Index({ fecha, cuentas }) {
@@ -99,17 +154,17 @@ export default function Index({ fecha, cuentas }) {
                     </p>
                 </div>
 
-                <div className="bg-white rounded-md border border-slate-200 overflow-x-auto">
+                <div className="bg-white rounded-md border border-slate-200 overflow-x-auto dark:bg-slate-900 dark:border-slate-700">
                     <table className="min-w-[520px] w-full text-sm">
-                        <thead className="bg-slate-50 border-b border-slate-200">
+                        <thead className="bg-slate-50 border-b border-slate-200 dark:bg-slate-800 dark:border-slate-700">
                             <tr>
-                                <th className="px-2 py-1 text-left font-medium text-slate-600">Cuenta</th>
-                                <th className="px-2 py-1 text-right font-medium text-slate-600 w-24">Saldo</th>
-                                <th className="px-2 py-1 text-right font-medium text-slate-600 w-28">Saldo real</th>
-                                <th className="px-2 py-1 text-right font-medium text-slate-600 w-20">Dif.</th>
+                                <th className="px-2 py-1 text-left font-medium text-slate-600 dark:text-slate-300">Cuenta</th>
+                                <th className="px-2 py-1 text-right font-medium text-slate-600 dark:text-slate-300 w-24">Saldo</th>
+                                <th className="px-2 py-1 text-right font-medium text-slate-600 dark:text-slate-300 w-28">Saldo real</th>
+                                <th className="px-2 py-1 text-right font-medium text-slate-600 dark:text-slate-300 w-20">Dif.</th>
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-slate-100">
+                        <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                             {rows.length === 0 ? (
                                 <tr>
                                     <td colSpan={4} className="px-2 py-4 text-center text-slate-500">
@@ -120,13 +175,16 @@ export default function Index({ fecha, cuentas }) {
                                 rows.map((row, index) => {
                                     const diff = diffs[index] ?? 0;
                                     return (
-                                        <tr key={row.id_cuenta} className={index % 2 === 1 ? 'bg-slate-50/80' : 'bg-white'}>
-                                            <td className="px-2 py-0.5 whitespace-nowrap">
-                                                <span className="font-mono text-xs text-slate-500 mr-1.5">{row.codigo}</span>
-                                                <span className="text-slate-800">{row.descripcion}</span>
-                                                {row.moneda?.simbolo && (
-                                                    <span className="ml-1 text-xs text-slate-400">{row.moneda.simbolo}</span>
-                                                )}
+                                        <tr key={row.id_cuenta} className={index % 2 === 1 ? 'bg-slate-50/80 dark:bg-slate-800/40' : 'bg-white dark:bg-slate-900'}>
+                                            <td className="px-2 py-0.5">
+                                                <div className="whitespace-nowrap">
+                                                    <span className="font-mono text-xs text-slate-500 mr-1.5">{row.codigo}</span>
+                                                    <span className="text-slate-800 dark:text-slate-100">{row.descripcion}</span>
+                                                    {row.moneda?.simbolo && (
+                                                        <span className="ml-1 text-xs text-slate-400">{row.moneda.simbolo}</span>
+                                                    )}
+                                                </div>
+                                                <AccountLinks row={row} fecha={fecha} diff={diff} />
                                             </td>
                                             <td className="px-2 py-0.5 text-right font-mono whitespace-nowrap tabular-nums">
                                                 {formatMoney(row.saldo)}

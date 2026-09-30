@@ -30,6 +30,8 @@ class Cuenta extends LegacyModel
         'imputable',
         'clase',
         'habilitada',
+        'id_cuenta_intereses',
+        'id_cuenta_ajuste',
     ];
 
     protected $casts = [
@@ -51,6 +53,16 @@ class Cuenta extends LegacyModel
     public function hijas(): HasMany
     {
         return $this->hasMany(self::class, 'id_superior');
+    }
+
+    public function cuentaIntereses(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'id_cuenta_intereses');
+    }
+
+    public function cuentaAjuste(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'id_cuenta_ajuste');
     }
 
     public function scopeHabilitadas(Builder $query): Builder

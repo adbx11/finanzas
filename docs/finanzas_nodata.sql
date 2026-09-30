@@ -206,9 +206,15 @@ CREATE TABLE `cuentas` (
   `imputable` tinyint(1) DEFAULT NULL,
   `clase` varchar(24) DEFAULT NULL,
   `habilitada` tinyint(1) DEFAULT '1',
+  `id_cuenta_intereses` int DEFAULT NULL,
+  `id_cuenta_ajuste` int DEFAULT NULL,
   PRIMARY KEY (`id`),
   KEY `id_moneda` (`id_moneda`),
-  KEY `id_superior` (`id_superior`)
+  KEY `id_superior` (`id_superior`),
+  KEY `id_cuenta_intereses` (`id_cuenta_intereses`),
+  KEY `id_cuenta_ajuste` (`id_cuenta_ajuste`),
+  CONSTRAINT `cuentas_id_cuenta_intereses_foreign` FOREIGN KEY (`id_cuenta_intereses`) REFERENCES `cuentas` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `cuentas_id_cuenta_ajuste_foreign` FOREIGN KEY (`id_cuenta_ajuste`) REFERENCES `cuentas` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB AUTO_INCREMENT=154 DEFAULT CHARSET=latin1;
 /*!40101 SET character_set_client = @saved_cs_client */;
 

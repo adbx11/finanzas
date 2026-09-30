@@ -22,7 +22,8 @@ class InteresesService
      *   cuentas_ars: list<string>,
      *   cuentas_usd: list<string>,
      *   filas: list<array>,
-     *   totales: array
+     *   totales: array,
+     *   totales_desglose: list<array>
      * }
      */
     public function report(
@@ -118,6 +119,13 @@ class InteresesService
             $params
         );
 
+        $desgloseByPeriodo = $this->desglosePorCuenta(
+            $desde,
+            $hasta,
+            $cuentasArs,
+            $cuentasUsd,
+        );
+
         $filas = [];
         $totales = [
             'valor_pesos' => '0',
@@ -125,20 +133,42 @@ class InteresesService
             'total_pesos' => '0',
             'total_usd' => '0',
         ];
+        $totalesDesglose = [];
 
         foreach ($rows as $row) {
+            $periodo = (string) $row->periodo;
+            $desglose = $desgloseByPeriodo[$periodo] ?? [];
             $fila = [
-                'periodo' => (string) $row->periodo,
+                'periodo' => $periodo,
                 'valor_pesos' => Money::round((string) ($row->valor_pesos ?? '0'), 2),
                 'valor_usd' => Money::round((string) ($row->valor_usd ?? '0'), 2),
                 'total_pesos' => Money::round((string) ($row->total_pesos ?? '0'), 2),
                 'total_usd' => Money::round((string) ($row->total_usd ?? '0'), 2),
+                'desglose' => $desglose,
             ];
             $filas[] = $fila;
             foreach (array_keys($totales) as $key) {
                 $totales[$key] = Money::add($totales[$key], $fila[$key], 2);
             }
+            foreach ($desglose as $item) {
+                $key = $item['codigo'];
+                if (! isset($totalesDesglose[$key])) {
+                    $totalesDesglose[$key] = [
+                        'codigo' => $item['codigo'],
+                        'nombre' => $item['nombre'],
+                        'moneda' => $item['moneda'],
+                        'importe' => '0',
+                    ];
+                }
+                $totalesDesglose[$key]['importe'] = Money::add(
+                    $totalesDesglose[$key]['importe'],
+                    $item['importe'],
+                    2,
+                );
+            }
         }
+
+        usort($totalesDesglose, fn ($a, $b) => strcmp($a['codigo'], $b['codigo']));
 
         return [
             'desde' => $desde->toDateString(),
@@ -148,6 +178,58 @@ class InteresesService
             'cuentas_usd' => $cuentasUsd,
             'filas' => $filas,
             'totales' => $totales,
+            'totales_desglose' => array_values($totalesDesglose),
         ];
+    }
+
+    /**
+     * @param  list<string>  $cuentasArs
+     * @param  list<string>  $cuentasUsd
+     * @return array<string, list<array{codigo: string, nombre: string, moneda: string, importe: string}>>
+     */
+    private function desglosePorCuenta(
+        Carbon $desde,
+        Carbon $hasta,
+        array $cuentasArs,
+        array $cuentasUsd,
+    ): array {
+        $all = array_values(array_unique(array_merge($cuentasArs, $cuentasUsd)));
+        if ($all === []) {
+            return [];
+        }
+
+        $placeholders = implode(',', array_fill(0, count($all), '?'));
+        $arsSet = array_fill_keys($cuentasArs, true);
+
+        $rows = DB::select(
+            "SELECT
+                CONCAT(LPAD(MONTH(asi.fecha), 2, '0'), '/', YEAR(asi.fecha)) AS periodo,
+                c.codigo,
+                c.nombre,
+                -1 * ROUND(SUM(ai.debe_origen - ai.haber_origen), 2) AS importe
+             FROM asientos asi
+             JOIN asiento_items ai ON asi.id = ai.id_asiento
+             JOIN cuentas c ON ai.id_cuenta = c.id
+             WHERE asi.fecha BETWEEN ? AND ?
+               AND c.codigo IN ({$placeholders})
+             GROUP BY YEAR(asi.fecha), MONTH(asi.fecha), c.id, c.codigo, c.nombre
+             HAVING importe <> 0
+             ORDER BY YEAR(asi.fecha), MONTH(asi.fecha), c.codigo",
+            array_merge([$desde->toDateString(), $hasta->toDateString()], $all),
+        );
+
+        $byPeriodo = [];
+        foreach ($rows as $row) {
+            $periodo = (string) $row->periodo;
+            $codigo = (string) $row->codigo;
+            $byPeriodo[$periodo][] = [
+                'codigo' => $codigo,
+                'nombre' => (string) ($row->nombre ?? ''),
+                'moneda' => isset($arsSet[$codigo]) ? 'ARS' : 'USD',
+                'importe' => Money::round((string) ($row->importe ?? '0'), 2),
+            ];
+        }
+
+        return $byPeriodo;
     }
 }

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react';
 
-export function useDebouncedCallback(callback, delay = 400) {
+export function useDebouncedCallback(callback, delay = 1000) {
     const timeoutRef = useRef(null);
     const callbackRef = useRef(callback);
 
