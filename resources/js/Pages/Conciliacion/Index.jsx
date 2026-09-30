@@ -48,7 +48,7 @@ function AccountLinks({ row, fecha, diff }) {
     const disabledClass = 'text-xs text-slate-300 cursor-not-allowed dark:text-slate-600';
 
     return (
-        <div className="flex flex-wrap gap-x-2 gap-y-0.5 mt-0.5">
+        <div className="flex flex-wrap gap-x-2 gap-y-0.5 whitespace-nowrap">
             <a href={mayorHref} target="_blank" rel="noopener noreferrer" className={linkClass}>
                 Mayor
             </a>
@@ -162,12 +162,13 @@ export default function Index({ fecha, cuentas }) {
                                 <th className="px-2 py-1 text-right font-medium text-slate-600 dark:text-slate-300 w-24">Saldo</th>
                                 <th className="px-2 py-1 text-right font-medium text-slate-600 dark:text-slate-300 w-28">Saldo real</th>
                                 <th className="px-2 py-1 text-right font-medium text-slate-600 dark:text-slate-300 w-20">Dif.</th>
+                                <th className="px-2 py-1 text-left font-medium text-slate-600 dark:text-slate-300">Acciones</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                             {rows.length === 0 ? (
                                 <tr>
-                                    <td colSpan={4} className="px-2 py-4 text-center text-slate-500">
+                                    <td colSpan={5} className="px-2 py-4 text-center text-slate-500">
                                         No hay cuentas 1.1 imputables habilitadas.
                                     </td>
                                 </tr>
@@ -176,15 +177,12 @@ export default function Index({ fecha, cuentas }) {
                                     const diff = diffs[index] ?? 0;
                                     return (
                                         <tr key={row.id_cuenta} className={index % 2 === 1 ? 'bg-slate-50/80 dark:bg-slate-800/40' : 'bg-white dark:bg-slate-900'}>
-                                            <td className="px-2 py-0.5">
-                                                <div className="whitespace-nowrap">
-                                                    <span className="font-mono text-xs text-slate-500 mr-1.5">{row.codigo}</span>
-                                                    <span className="text-slate-800 dark:text-slate-100">{row.descripcion}</span>
-                                                    {row.moneda?.simbolo && (
-                                                        <span className="ml-1 text-xs text-slate-400">{row.moneda.simbolo}</span>
-                                                    )}
-                                                </div>
-                                                <AccountLinks row={row} fecha={fecha} diff={diff} />
+                                            <td className="px-2 py-0.5 whitespace-nowrap">
+                                                <span className="font-mono text-xs text-slate-500 mr-1.5">{row.codigo}</span>
+                                                <span className="text-slate-800 dark:text-slate-100">{row.descripcion}</span>
+                                                {row.moneda?.simbolo && (
+                                                    <span className="ml-1 text-xs text-slate-400">{row.moneda.simbolo}</span>
+                                                )}
                                             </td>
                                             <td className="px-2 py-0.5 text-right font-mono whitespace-nowrap tabular-nums">
                                                 {formatMoney(row.saldo)}
@@ -202,6 +200,9 @@ export default function Index({ fecha, cuentas }) {
                                             }`}
                                             >
                                                 {formatMoney(diff)}
+                                            </td>
+                                            <td className="px-2 py-0.5">
+                                                <AccountLinks row={row} fecha={fecha} diff={diff} />
                                             </td>
                                         </tr>
                                     );
