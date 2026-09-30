@@ -9,7 +9,7 @@ import { formatDecimalInput, parseDecimalInput } from '@/utils/decimalInput';
 import { toDateInputValue } from '@/utils/dateFormat';
 import { indexHrefFromListState } from '@/utils/listState';
 import { Head, Link, useForm } from '@inertiajs/react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 function emptyItem() {
     return {
@@ -49,9 +49,22 @@ async function fetchCotizacion({ idMoneda, fecha, idCuenta, promedio }) {
     return json.cotizacion;
 }
 
-function usePromedioForItem(item) {
-    const haber = parseDecimalInput(item.haber_origen) || '0';
-    return Number(haber) !== 0;
+function itemAmount(item, field) {
+    return Number(parseDecimalInput(item[field]) || 0);
+}
+
+/** Cotización promedio solo con haber (sin debe). */
+function shouldUsePromedio(item) {
+    return itemAmount(item, 'haber_origen') !== 0 && itemAmount(item, 'debe_origen') === 0;
+}
+
+function lineSnapshot(item) {
+    return {
+        id_cuenta: item.id_cuenta,
+        id_moneda: item.id_moneda,
+        debe_origen: item.debe_origen,
+        haber_origen: item.haber_origen,
+    };
 }
 
 function lineLocal(item) {
@@ -74,6 +87,7 @@ export default function Form({ asiento, monedas, cuentas, isCopy = false, isPref
     });
 
     const [fetchingCotizacionLine, setFetchingCotizacionLine] = useState(null);
+    const cotizacionWatchRef = useRef(null);
 
     const totals = useMemo(() => {
         return form.data.items.reduce(
@@ -90,43 +104,102 @@ export default function Form({ asiento, monedas, cuentas, isCopy = false, isPref
     const diferencia = totals.debe - totals.haber;
 
     useEffect(() => {
-        if (isEdit || isPrefill) return undefined;
+        if (isPrefill) return undefined;
 
         let active = true;
+        const fecha = form.data.fecha;
+        const items = form.data.items;
+        const snapshot = {
+            fecha,
+            lines: items.map(lineSnapshot),
+        };
+        const prev = cotizacionWatchRef.current;
 
         (async () => {
-            const nextItems = [...form.data.items];
+            if (!prev) {
+                cotizacionWatchRef.current = snapshot;
+                return;
+            }
+
+            const fechaChanged = prev.fecha !== fecha;
+            const nextItems = items.map((item) => ({ ...item }));
             let changed = false;
 
-            for (let i = 0; i < nextItems.length; i++) {
-                const item = nextItems[i];
-                if (!item.id_moneda || !form.data.fecha) continue;
+            for (let i = 0; i < items.length; i++) {
+                const item = items[i];
+                const moneda = monedas.find((m) => String(m.id) === String(item.id_moneda));
+                if (!item.id_moneda || !fecha || !moneda || moneda.local) {
+                    continue;
+                }
+
+                const prevLine = prev.lines[i];
+                const isNewLine = !prevLine;
+                const lineImporteChanged = Boolean(prevLine) && (
+                    prevLine.debe_origen !== item.debe_origen
+                    || prevLine.haber_origen !== item.haber_origen
+                );
+                const lineMetaChanged = Boolean(prevLine) && (
+                    prevLine.id_moneda !== item.id_moneda
+                    || prevLine.id_cuenta !== item.id_cuenta
+                );
+
+                if (!shouldUsePromedio(item)) {
+                    // Spot solo al elegir moneda/cuenta (no al tocar importes de otras líneas).
+                    if (!isNewLine && !lineMetaChanged) {
+                        continue;
+                    }
+                    const rate = await fetchCotizacion({
+                        idMoneda: item.id_moneda,
+                        fecha,
+                        idCuenta: item.id_cuenta,
+                        promedio: false,
+                    });
+                    if (!active || rate == null) continue;
+                    const formatted = formatDecimalInput(rate, 10);
+                    if (nextItems[i].cotizacion !== formatted) {
+                        nextItems[i] = { ...nextItems[i], cotizacion: formatted };
+                        changed = true;
+                    }
+                    continue;
+                }
+
+                // Promedio: solo si cambió la fecha del asiento o el importe/meta de ESTA línea.
+                if (!fechaChanged && !lineImporteChanged && !lineMetaChanged && !isNewLine) {
+                    continue;
+                }
 
                 const rate = await fetchCotizacion({
                     idMoneda: item.id_moneda,
-                    fecha: form.data.fecha,
+                    fecha,
                     idCuenta: item.id_cuenta,
-                    promedio: usePromedioForItem(item),
+                    promedio: true,
                 });
                 if (!active || rate == null) continue;
 
                 const formatted = formatDecimalInput(rate, 10);
-                if (item.cotizacion !== formatted) {
-                    nextItems[i] = { ...item, cotizacion: formatted };
+                if (nextItems[i].cotizacion !== formatted) {
+                    nextItems[i] = { ...nextItems[i], cotizacion: formatted };
                     changed = true;
                 }
             }
 
-            if (active && changed) {
+            if (!active) return;
+
+            cotizacionWatchRef.current = {
+                fecha,
+                lines: nextItems.map(lineSnapshot),
+            };
+
+            if (changed) {
                 form.setData('items', nextItems);
             }
         })();
 
         return () => { active = false; };
     }, [
-        isEdit,
         isPrefill,
         form.data.fecha,
+        monedas,
         form.data.items.map((i) => [
             i.id_moneda,
             i.id_cuenta,
