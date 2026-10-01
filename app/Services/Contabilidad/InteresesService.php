@@ -205,14 +205,14 @@ class InteresesService
             "SELECT
                 CONCAT(LPAD(MONTH(asi.fecha), 2, '0'), '/', YEAR(asi.fecha)) AS periodo,
                 c.codigo,
-                c.nombre,
+                c.descripcion AS nombre,
                 -1 * ROUND(SUM(ai.debe_origen - ai.haber_origen), 2) AS importe
              FROM asientos asi
              JOIN asiento_items ai ON asi.id = ai.id_asiento
              JOIN cuentas c ON ai.id_cuenta = c.id
              WHERE asi.fecha BETWEEN ? AND ?
                AND c.codigo IN ({$placeholders})
-             GROUP BY YEAR(asi.fecha), MONTH(asi.fecha), c.id, c.codigo, c.nombre
+             GROUP BY YEAR(asi.fecha), MONTH(asi.fecha), c.id, c.codigo, c.descripcion
              HAVING importe <> 0
              ORDER BY YEAR(asi.fecha), MONTH(asi.fecha), c.codigo",
             array_merge([$desde->toDateString(), $hasta->toDateString()], $all),
