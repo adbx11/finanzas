@@ -203,7 +203,8 @@ class InteresesService
 
         $rows = DB::select(
             "SELECT
-                CONCAT(LPAD(MONTH(asi.fecha), 2, '0'), '/', YEAR(asi.fecha)) AS periodo,
+                YEAR(asi.fecha) AS anio,
+                MONTH(asi.fecha) AS mes,
                 c.codigo,
                 c.descripcion AS nombre,
                 -1 * ROUND(SUM(ai.debe_origen - ai.haber_origen), 2) AS importe
@@ -220,7 +221,7 @@ class InteresesService
 
         $byPeriodo = [];
         foreach ($rows as $row) {
-            $periodo = (string) $row->periodo;
+            $periodo = sprintf('%02d/%d', (int) $row->mes, (int) $row->anio);
             $codigo = (string) $row->codigo;
             $byPeriodo[$periodo][] = [
                 'codigo' => $codigo,
